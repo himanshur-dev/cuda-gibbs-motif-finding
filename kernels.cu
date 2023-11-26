@@ -10,6 +10,9 @@
 #include <math.h>
 #include <chrono>
 #include <vector>
+#include <thrust/reduce.h>
+#include <thrust/execution_policy.h>
+#include <thrust/device_ptr.h>
 #include <cuda_runtime.h>
 #include "main.h"
 
@@ -112,7 +115,7 @@ __global__ void parallel_calculateProfileProbabilities(char *d_data, int *d_prof
     }
 }
 
-// wrapper function
+// wrapper function to generate profile probabilities
 void parallel_generateProfileProbabilities(char *d_data, int *d_profile, 
                                                        int *d_profileGeneratedProbabilities, 
                                                        int numProfileProbabilities, int seqToIgnore,
@@ -127,4 +130,58 @@ void parallel_generateProfileProbabilities(char *d_data, int *d_profile,
     );
     cErr = cudaGetLastError();
     assert(cErr == cudaSuccess);
+}
+
+
+// calculates the kmer score at each position
+__global__ void parallel_calculateKmerSubscores(char *d_data, int *d_kmerLocations, int *d_kmerSubscores, 
+                                                int numSequences, int seqLen, int kmerSize) {
+    int kmerOffset = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (kmerOffset < kmerSize) {
+        int numA = 0;
+        int numC = 0;
+        int numG = 0;
+        int numT = 0;
+        for (int seqIdx = 0; seqIdx < numSequences; seqIdx++) {
+            int currNucleotideIdx = (seqIdx * seqLen) + d_kmerLocations[seqIdx] + kmerOffset;
+            char currNucleotide = d_data[currNucleotideIdx];
+            switch(currNucleotide) {
+                case 'A':
+                    numA++;
+                    break;
+                case 'C':
+                    numC++;
+                    break;
+                case 'G':
+                    numG++;
+                    break;
+                case 'T':
+                    numT++;
+                    break;
+                default:
+                    assert(false);
+                    break;
+            }
+        }
+        d_kmerSubscores[kmerOffset] = numSequences - max(max(max(numA, numC), numG), numT);
+    }
+}
+
+// wrapper function to calculate the score of this set of k-mers
+int parallel_calculateKmerScore(char *d_data, int *d_kmerLocations, int *d_kmerSubscores, 
+                                 int numSequences, int seqLen, int kmerSize) {
+    cudaError_t cErr;
+
+    // calculate position scores
+    int numSubscoreBlocks = getNumBlocks(kmerSize);
+    parallel_calculateKmerSubscores<<<numSubscoreBlocks, THREADSPERBLOCK>>>(d_data, d_kmerLocations,
+        d_kmerSubscores, numSequences, seqLen, kmerSize);
+    cErr = cudaGetLastError();
+    assert(cErr == cudaSuccess);
+
+    // reduce kmer scores
+    thrust::device_ptr<int> subscorePointer(d_kmerSubscores);
+    int score = thrust::reduce(thrust::device, subscorePointer, subscorePointer + kmerSize, 0,
+        thrust::plus<int>());
+    return score;
 }

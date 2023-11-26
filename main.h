@@ -14,5 +14,8 @@ void parallel_generateProfileProbabilities(char *d_data, int *d_profile,
                                            int *d_profileGeneratedProbabilities, 
                                            int numProfileProbabilities, int seqToIgnore,
                                            int seqLen, int kmerSize);
+                            
+int parallel_calculateKmerScore(char *d_data, int *d_kmerLocations, int *d_kmerSubscores, 
+                                 int numSequences, int seqLen, int kmerSize);
 
 #endif

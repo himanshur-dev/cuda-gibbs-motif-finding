@@ -420,7 +420,7 @@ int main(int argc, char* argv[]) {
         if (userArgs->verboseOutput) printf("Starting parallel run\n");
 
         // allocate GPU memory
-        int *d_profileMatrix, *d_kmerLocations, *d_profileGeneratedProbabilities;
+        int *d_profileMatrix, *d_kmerLocations, *d_profileGeneratedProbabilities, *d_kmerSubscores;
         char *d_data;
         cudaError_t cErr;
         cErr = cudaMalloc(&d_profileMatrix, profileMatrixSize * sizeof(int));
@@ -430,6 +430,8 @@ int main(int argc, char* argv[]) {
         cErr = cudaMalloc(&d_profileGeneratedProbabilities, numProfileProbabilities * sizeof(int));
         assert(cErr == cudaSuccess);
         cErr = cudaMalloc(&d_data, dataWrapper->numSequences * dataWrapper->seqLen * sizeof(char));
+        assert(cErr == cudaSuccess);
+        cErr = cudaMalloc(&d_kmerSubscores, userArgs->kmerSize * sizeof(int));
         assert(cErr == cudaSuccess);
         cErr = cudaMemcpy(d_kmerLocations, kmerLocations, 
             kmerLocationsSize * sizeof(int), cudaMemcpyHostToDevice);
@@ -473,7 +475,8 @@ int main(int argc, char* argv[]) {
             assert(cErr == cudaSuccess);
             if (userArgs->verboseOutput) printKmers(dataWrapper, userArgs->kmerSize, kmerLocations);
             // 6: score motifs
-            int currKmerScore = sequential_calculateKmerScore(userArgs, dataWrapper, kmerLocations);
+            int currKmerScore = parallel_calculateKmerScore(d_data, d_kmerLocations, d_kmerSubscores, dataWrapper->numSequences,
+                dataWrapper->seqLen, userArgs->kmerSize);
             if (userArgs->verboseOutput) printf("Score for this iteration: %d\n", currKmerScore);
             if (currKmerScore < bestKmerScore) {
                 copyKmers(kmerLocations, bestKmerLocations, dataWrapper->numSequences);
@@ -496,8 +499,8 @@ int main(int argc, char* argv[]) {
     // Output results
     printf("-------- Final Data --------\n");
     printf("Runtime: %lf\n", time.count());
+    printf("Best k-mer score: %d\n", bestKmerScore);
     if (userArgs->printFinalKmers) {
-        printf("Best k-mer score: %d\n", bestKmerScore);
         printKmers(dataWrapper, userArgs->kmerSize, bestKmerLocations);
     }
     printf("-------------------------------\n\n\n");
