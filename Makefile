@@ -1,7 +1,7 @@
 main:
-	/lusr/cuda-11.6/bin/nvcc -g -o main.o -c main.cpp
-	/lusr/cuda-11.6/bin/nvcc -g -o kernels.o -c kernels.cu
-	/lusr/cuda-11.6/bin/nvcc -g -o main main.o kernels.o
+	/lusr/cuda-11.6/bin/nvcc -o main.o -c main.cpp
+	/lusr/cuda-11.6/bin/nvcc -o kernels.o -c kernels.cu
+	/lusr/cuda-11.6/bin/nvcc -o main main.o kernels.o
 
 .PHONY: clean
 clean:
@@ -11,9 +11,7 @@ clean:
 
 .PHONY: test
 test:
-	./main -i /u/himanshu/concurrency/final-project/input_sequences-big.txt -n 100 -k 400 -s 21 -p
-
-
+	./main -i /u/himanshu/concurrency/final-project/data/base-data-file.txt -n 1600 -k 10 -p
 run:
 	make clean 
 	make main

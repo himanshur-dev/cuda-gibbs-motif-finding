@@ -11,6 +11,7 @@
 #include <chrono>
 #include <vector>
 #include <algorithm>
+#include <random>
 #include <cuda_runtime.h>
 #include "main.h"
 
@@ -21,7 +22,7 @@ struct UserArgs {
     char *inputFileName;
     int numIters;
     int kmerSize;
-    int seed = 42;
+    int seed = 21; // arbitrairly chosen
     bool useParallel = false;
     bool verboseOutput = false;
     bool printFinalKmers = false;
@@ -268,24 +269,13 @@ void printProfileProbabilities(int *profileGeneratedProbabilities, int numProfil
     }
 }
 
-
 int sequential_pickRandomKmer(int *profileGeneratedProbabilities, int numProfileProbabilities) {
-    int total = 0;
-    for (int i = 0; i < numProfileProbabilities; i++) {
-        total += profileGeneratedProbabilities[i];
-    }
-    int randVal = rand() % (total+1);
-    int currSum  = 0;
-    for (int i = 0; i < numProfileProbabilities; i++) {
-        currSum += profileGeneratedProbabilities[i];
-        if (randVal <= currSum) {
-            return i;
-        }
-    }
-
-    // we should never get here
-    assert(false);
-    return -1;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<int> dist(profileGeneratedProbabilities, profileGeneratedProbabilities + numProfileProbabilities);
+    int index = dist(gen);
+    assert(index >=0 && index < numProfileProbabilities);
+    return index;
 }
 
 // this uses the Hamming distance as the distace metric
@@ -415,8 +405,8 @@ int main(int argc, char* argv[]) {
         if (userArgs->verboseOutput) printf("Sequential run finished!\n");
     } else {
         // parallel implementation
-        // note that some parts remain sequential, as this algorithm focuses on 
-        // parallelizing the most important parts
+        // note that some parts remain sequential, as it doesn't make sense to 
+        // parallelize all parts of the algorithm
         if (userArgs->verboseOutput) printf("Starting parallel run\n");
 
         // allocate GPU memory
